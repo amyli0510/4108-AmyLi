@@ -1018,6 +1018,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Movement_FollowMouse
   smoothTime: 0.1
   targetCamera: {fileID: 0}
+  followOffset: {x: 0, y: 0}
   clampToScreen: 0
   boundsSource: {fileID: 0}
   screenPadding: 0
@@ -2260,6 +2261,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Movement_FollowMouse
   smoothTime: 0.1
   targetCamera: {fileID: 29907272}
+  followOffset: {x: 0, y: 0}
   clampToScreen: 0
   boundsSource: {fileID: 0}
   screenPadding: 0
@@ -2331,7 +2333,7 @@ Transform:
   m_GameObject: {fileID: 2086917553}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.16, y: -4.45, z: 0}
+  m_LocalPosition: {x: -1.32, y: -4.45, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
