@@ -12,6 +12,10 @@ using UnityEngine;
 /// </summary>
 public abstract class Minigame_Base : MonoBehaviour
 {
+    [Title("Info")]
+    [Tooltip("Display name shown in the UI while this minigame runs.")]
+    [SerializeField] private string title;
+
     [Title("Countdown")]
     [SerializeField] protected Countdown countdown = new();
 
@@ -26,6 +30,9 @@ public abstract class Minigame_Base : MonoBehaviour
 
     /// <summary>Stable id used for the PlayerPrefs key, e.g. "Minigame_Brush".</summary>
     public string MinigameId => GetType().Name;
+
+    /// <summary>Display name for the UI; falls back to the id if left blank.</summary>
+    public string Title => string.IsNullOrEmpty(title) ? MinigameId : title;
 
     public float CountdownTimeRemaining => countdown.TimeRemaining;
     public float CountdownProgress => countdown.Progress;
@@ -87,12 +94,24 @@ public abstract class Minigame_Base : MonoBehaviour
         if (!enabled)
             return;
 
+        // Only one minigame runs at a time, however it was started.
+        foreach (Minigame_Base other in instances.Values)
+            if (other != null && other != this && other.IsPlaying)
+                other.EndMinigame();
+
+        // Teeth visuals: shown for most minigames, hidden for those that don't use them.
+        if (Teeth.Instance != null)
+            Teeth.Instance.SetVisible(ShowsTeeth);
+
         score = 0;
         IsPlaying = true;
         countdown.Begin();
         OnMinigameStarted();
         Started?.Invoke(this);
     }
+
+    /// <summary>Whether the teeth visuals should be shown while this minigame runs.</summary>
+    protected virtual bool ShowsTeeth => true;
 
     [Button("■ End Minigame")]
     public void EndMinigame()
@@ -104,11 +123,16 @@ public abstract class Minigame_Base : MonoBehaviour
         countdown.Stop();
         OnMinigameEnded();
         SaveHighScore();
+
+        // Teeth are only shown while a brush/floss game runs — hide them when it ends.
+        if (Teeth.Instance != null)
+            Teeth.Instance.SetVisible(false);
+
         Ended?.Invoke(this);
     }
 
     [Button("Clear Saved High Score")]
-    private void ClearHighScore()
+    public void ResetHighScore()
     {
         PlayerPrefs.DeleteKey(HighScoreKey);
         PlayerPrefs.Save();
@@ -118,6 +142,7 @@ public abstract class Minigame_Base : MonoBehaviour
     protected void AddScore(int amount)
     {
         score = Mathf.Max(0, score + amount);
+        SaveHighScore(); // auto-save whenever the score changes
     }
 
     private void SaveHighScore()

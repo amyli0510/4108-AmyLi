@@ -16,16 +16,12 @@ public class Movement_FollowMouse : MonoBehaviour
     [SerializeField] private Vector2 followOffset = Vector2.zero;
 
     [Title("Screen Bounds")]
-    [Tooltip("Keep the sprite fully inside the camera's view.")]
+    [Tooltip("Clamp the cursor position to stay inside the camera's view.")]
     [SerializeField] private bool clampToScreen = false;
 
-    [Tooltip("Renderer used to measure the sprite's size. Auto-found on this object (or children) if left empty.")]
+    [Tooltip("Extra gap kept between the cursor and the screen edge, in pixels.")]
     [ShowField(nameof(clampToScreen))]
-    [SerializeField] private Renderer boundsSource;
-
-    [Tooltip("Extra gap kept between the sprite's edge and the screen edge.")]
-    [ShowField(nameof(clampToScreen))]
-    [Suffix("units")]
+    [Suffix("px")]
     [SerializeField] private float screenPadding = 0f;
 
     private Vector3 velocity;
@@ -38,9 +34,6 @@ public class Movement_FollowMouse : MonoBehaviour
 
         // Keep whatever depth the object started at (matters for sorting / perspective).
         startZ = transform.position.z;
-
-        if (boundsSource == null)
-            boundsSource = GetComponentInChildren<Renderer>();
     }
 
     void Update()
@@ -51,6 +44,10 @@ public class Movement_FollowMouse : MonoBehaviour
         // Mouse position in screen pixels.
         Vector3 mouseScreen = Mouse.current.position.ReadValue();
 
+        // Keep the cursor itself inside the view before converting to world space.
+        if (clampToScreen)
+            mouseScreen = ClampMouseToScreen(mouseScreen);
+
         // Distance from the camera to the object's plane, so this works for both
         // orthographic (2D) and perspective cameras.
         mouseScreen.z = Mathf.Abs(targetCamera.transform.position.z - startZ);
@@ -60,42 +57,16 @@ public class Movement_FollowMouse : MonoBehaviour
         target.y += followOffset.y;
         target.z = startZ;
 
-        // Clamp the target (not the smoothed result) so the sprite eases to a stop
-        // at the edge instead of fighting the boundary.
-        if (clampToScreen)
-            target = ClampToScreen(target);
-
         // Smoothly ease toward the cursor instead of snapping.
         transform.position = Vector3.SmoothDamp(transform.position, target, ref velocity, smoothTime);
     }
 
-    /// <summary>Clamps a world position so the sprite's bounds stay inside the camera view.</summary>
-    private Vector3 ClampToScreen(Vector3 position)
+    /// <summary>Clamps a screen-pixel position to the camera's viewport, with padding.</summary>
+    private Vector3 ClampMouseToScreen(Vector3 screen)
     {
-        // World-space corners of the camera view at the object's depth (works for ortho + perspective).
-        float zDist = Mathf.Abs(targetCamera.transform.position.z - startZ);
-        Vector3 bottomLeft = targetCamera.ViewportToWorldPoint(new Vector3(0f, 0f, zDist));
-        Vector3 topRight = targetCamera.ViewportToWorldPoint(new Vector3(1f, 1f, zDist));
-
-        // Half-size of the sprite (extents already account for scale), plus padding.
-        float halfWidth = screenPadding;
-        float halfHeight = screenPadding;
-        if (boundsSource != null)
-        {
-            Vector3 extents = boundsSource.bounds.extents;
-            halfWidth += extents.x;
-            halfHeight += extents.y;
-        }
-
-        float minX = bottomLeft.x + halfWidth;
-        float maxX = topRight.x - halfWidth;
-        float minY = bottomLeft.y + halfHeight;
-        float maxY = topRight.y - halfHeight;
-
-        // If the sprite is wider/taller than the screen, just center it on that axis.
-        position.x = minX <= maxX ? Mathf.Clamp(position.x, minX, maxX) : (bottomLeft.x + topRight.x) * 0.5f;
-        position.y = minY <= maxY ? Mathf.Clamp(position.y, minY, maxY) : (bottomLeft.y + topRight.y) * 0.5f;
-
-        return position;
+        Rect rect = targetCamera.pixelRect;
+        screen.x = Mathf.Clamp(screen.x, rect.xMin + screenPadding, rect.xMax - screenPadding);
+        screen.y = Mathf.Clamp(screen.y, rect.yMin + screenPadding, rect.yMax - screenPadding);
+        return screen;
     }
 }
