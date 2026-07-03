@@ -48,6 +48,32 @@ public class Teeth : MonoBehaviour
             Instance = null;
     }
 
+    /// <summary>True when there is at least one tooth and all of them are brush-cleaned.</summary>
+    public bool AllBrushCleaned()
+    {
+        if (teeth.Count == 0)
+            return false;
+
+        for (int i = 0; i < teeth.Count; i++)
+            if (teeth[i] != null && !teeth[i].BrushCleaned)
+                return false;
+
+        return true;
+    }
+
+    /// <summary>True when there is at least one tooth and all of them are floss-cleaned.</summary>
+    public bool AllFlossCleaned()
+    {
+        if (teeth.Count == 0)
+            return false;
+
+        for (int i = 0; i < teeth.Count; i++)
+            if (teeth[i] != null && !teeth[i].FlossCleaned)
+                return false;
+
+        return true;
+    }
+
     /// <summary>Resets every tooth to a fresh random plaque subset.</summary>
     public void ResetAllPlaque()
     {

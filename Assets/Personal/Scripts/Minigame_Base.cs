@@ -16,6 +16,13 @@ public abstract class Minigame_Base : MonoBehaviour
     [Tooltip("Display name shown in the UI while this minigame runs.")]
     [SerializeField] private string title;
 
+    [Tooltip("Looping music played while this minigame runs.")]
+    [SerializeField] private AudioClip music;
+
+    [Tooltip("Volume override for this minigame's music.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float musicVolume = 1f;
+
     [Title("Countdown")]
     [SerializeField] protected Countdown countdown = new();
 
@@ -33,6 +40,9 @@ public abstract class Minigame_Base : MonoBehaviour
 
     /// <summary>Display name for the UI; falls back to the id if left blank.</summary>
     public string Title => string.IsNullOrEmpty(title) ? MinigameId : title;
+
+    public AudioClip Music => music;
+    public float MusicVolume => musicVolume;
 
     public float CountdownTimeRemaining => countdown.TimeRemaining;
     public float CountdownProgress => countdown.Progress;
@@ -114,7 +124,12 @@ public abstract class Minigame_Base : MonoBehaviour
     protected virtual bool ShowsTeeth => true;
 
     [Button("■ End Minigame")]
-    public void EndMinigame()
+    public void EndMinigame() => Stop(true);
+
+    /// <summary>Stops the minigame without saving the score (used for quitting to the menu).</summary>
+    public void AbortMinigame() => Stop(false);
+
+    private void Stop(bool saveScore)
     {
         if (!IsPlaying)
             return;
@@ -122,7 +137,9 @@ public abstract class Minigame_Base : MonoBehaviour
         IsPlaying = false;
         countdown.Stop();
         OnMinigameEnded();
-        SaveHighScore();
+
+        if (saveScore)
+            SaveHighScore();
 
         // Teeth are only shown while a brush/floss game runs — hide them when it ends.
         if (Teeth.Instance != null)

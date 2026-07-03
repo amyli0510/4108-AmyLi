@@ -28,6 +28,10 @@ public class Minigame_Floss : Minigame_Base
     [Tooltip("Points awarded for each fully-flossed tooth.")]
     [SerializeField] private int pointsPerTooth = 1;
 
+    [Title("Audio")]
+    [Tooltip("One-shot sound when a tooth is fully cleaned.")]
+    [SerializeField] private string cleanedSound = "Floss Clean";
+
     private Tooth target;
     private float prevMouseY;
     private bool hasPrevMouseY;
@@ -72,6 +76,14 @@ public class Minigame_Floss : Minigame_Base
         Vector2 mouseWorld = GetMouseWorld();
         UpdateTarget(mouseWorld);
 
+        // Finish early once every tooth is clean.
+        Teeth registry = Registry;
+        if (registry != null && registry.AllFlossCleaned())
+        {
+            EndMinigame();
+            return;
+        }
+
         float dy = hasPrevMouseY ? mouseWorld.y - prevMouseY : 0f;
         prevMouseY = mouseWorld.y;
         hasPrevMouseY = true;
@@ -86,7 +98,10 @@ public class Minigame_Floss : Minigame_Base
             return;
 
         if (target.FadeFlossPlaque(amount))
+        {
             AddScore(pointsPerTooth);
+            Audio_Manager.Instance?.Play(cleanedSound);
+        }
     }
 
     protected override void OnMinigameEnded()

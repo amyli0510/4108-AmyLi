@@ -77,6 +77,10 @@ public class Minigame_Food : Minigame_Base
     [SerializeField] private int goodPoints = 1;
     [SerializeField] private int badPoints = 1;
 
+    [Title("Audio")]
+    [Tooltip("One-shot sound when good food is caught in the basket.")]
+    [SerializeField] private string captureSound = "Food Capture";
+
     [Title("Pooling")]
     [Tooltip("Optional parent for spawned food, to keep the hierarchy tidy.")]
     [SerializeField] private Transform container;
@@ -235,6 +239,8 @@ public class Minigame_Food : Minigame_Base
                 if (dx * dx + dy * dy <= catchSqr)
                 {
                     AddScore(f.isGood ? goodPoints : -badPoints);
+                    if (f.isGood)
+                        Audio_Manager.Instance?.Play(captureSound);
                     ReleaseAt(i, f);
                 }
             }

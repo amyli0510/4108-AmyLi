@@ -24,6 +24,12 @@ public class Minigame_Brush : Minigame_Base
     [Tooltip("Points awarded for each fully-cleaned tooth.")]
     [SerializeField] private int pointsPerTooth = 1;
 
+    [Title("Audio")]
+    [Tooltip("Looping sound played while brushing over a tooth (Audio_Manager clip name).")]
+    [SerializeField] private string brushingLoopSound = "Brushing";
+    [Tooltip("One-shot sound when a tooth is fully cleaned.")]
+    [SerializeField] private string cleanedSound = "Brush Clean";
+
     private float prevContactX;
 
     private Teeth Registry => teethRegistry != null ? teethRegistry : Teeth.Instance;
@@ -48,6 +54,13 @@ public class Minigame_Brush : Minigame_Base
 
         if (toothbrush != null)
             prevContactX = toothbrush.ContactPoint.x;
+
+        // Start the brushing loop paused; it resumes while actually scrubbing a tooth.
+        if (Audio_Manager.Instance != null)
+        {
+            Audio_Manager.Instance.PlayLoop(brushingLoopSound);
+            Audio_Manager.Instance.SetLoopPaused(true);
+        }
     }
 
     protected override void OnMinigameTick(float deltaTime)
@@ -64,26 +77,39 @@ public class Minigame_Brush : Minigame_Base
         // Only sideways (side-to-side) motion scrubs — vertical motion does nothing.
         float horizontalTravel = Mathf.Abs(contact.x - prevContactX);
         prevContactX = contact.x;
-        if (horizontalTravel <= 0f)
-            return;
-
+        bool moving = horizontalTravel > 0f;
         float amount = horizontalTravel * cleanSpeed;
 
+        bool overTooth = false;
         IReadOnlyList<Tooth> teeth = registry.All;
         for (int i = 0; i < teeth.Count; i++)
         {
             Tooth t = teeth[i];
-            if (t == null || t.BrushCleaned)
+            if (t == null)
                 continue;
 
-            if (t.FadeBrushPlaqueInRadius(contact, toothbrush.Radius, amount))
+            if (t.ContainsPoint(contact))
+                overTooth = true;
+
+            if (moving && !t.BrushCleaned && t.FadeBrushPlaqueInRadius(contact, toothbrush.Radius, amount))
+            {
                 AddScore(pointsPerTooth);
+                Audio_Manager.Instance?.Play(cleanedSound);
+            }
         }
+
+        // Brushing sound plays while scrubbing over a tooth; pauses otherwise.
+        Audio_Manager.Instance?.SetLoopPaused(!(moving && overTooth));
+
+        // Finish early once every tooth is clean.
+        if (registry.AllBrushCleaned())
+            EndMinigame();
     }
 
     protected override void OnMinigameEnded()
     {
         SetBrushActive(false);
+        Audio_Manager.Instance?.StopLoop();
     }
 
     private void SetBrushActive(bool active)

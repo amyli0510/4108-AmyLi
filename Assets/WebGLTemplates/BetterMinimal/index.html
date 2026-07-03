@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+        html,
+        body {
+            background: {{{ BACKGROUND || '#000' }}};
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            padding: 0;
+            margin: 0;
+        }
+
+        div#gameContainer {
+            background: transparent !important;
+            position: absolute;
+        }
+
+        div#gameContainer canvas {
+            position: absolute;
+        }
+
+        div#gameContainer canvas[data-pixel-art="true"] {
+            position: absolute;
+            image-rendering: optimizeSpeed;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -o-crisp-edges;
+            image-rendering: crisp-edges;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: optimize-contrast;
+            image-rendering: pixelated;
+            -ms-interpolation-mode: nearest-neighbor;
+        }
+    </style>
+    <script>
+        (function () {
+            var bridge = {
+                objectName: null,
+                pasteMethodName: "OnBrowserPaste",
+                copyMethodName: "OnBrowserCopyRequested",
+                cutMethodName: "OnBrowserCutRequested",
+                lastCopiedText: "",
+                copyCutEventActive: false,
+                canvas: null,
+                hasCanvasFocus: false,
+                isInitialized: false,
+
+                registerUnityBridge: function (objectName) {
+                    if (objectName) {
+                        this.objectName = objectName;
+                    }
+                },
+
+                setClipboardText: function (text) {
+                    var safeText = text || "";
+                    this.lastCopiedText = safeText;
+
+                    // In blocked iframe environments (for example some embeds), we avoid
+                    // async clipboard APIs and rely on copy/cut events with clipboardData.
+                    if (this.copyCutEventActive) {
+                        return;
+                    }
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(safeText).catch(function () { });
+                        return;
+                    }
+
+                    var fallbackInput = document.createElement("textarea");
+                    fallbackInput.value = safeText;
+                    fallbackInput.setAttribute("readonly", "");
+                    fallbackInput.style.position = "fixed";
+                    fallbackInput.style.top = "-1000px";
+                    fallbackInput.style.left = "-1000px";
+                    document.body.appendChild(fallbackInput);
+                    fallbackInput.select();
+
+                    try {
+                        document.execCommand("copy");
+                    } catch (error) {
+                        console.warn("Clipboard fallback copy failed.", error);
+                    }
+
+                    document.body.removeChild(fallbackInput);
+                },
+
+                isUnityFocused: function () {
+                    if (this.hasCanvasFocus) {
+                        return true;
+                    }
+
+                    if (!this.canvas) {
+                        return false;
+                    }
+
+                    return document.activeElement === this.canvas;
+                },
+
+                sendToUnity: function (methodName, value) {
+                    if (!this.objectName || !methodName) {
+                        return false;
+                    }
+
+                    var instance = window.unityInstance;
+                    if (!instance || typeof instance.SendMessage !== "function") {
+                        return false;
+                    }
+
+                    instance.SendMessage(this.objectName, methodName, value || "");
+                    return true;
+                },
+
+                requestPaste: function (sourceEvent) {
+                    var self = this;
+
+                    if (sourceEvent && sourceEvent.clipboardData) {
+                        var directText = sourceEvent.clipboardData.getData("text");
+                        self.sendToUnity(self.pasteMethodName, directText);
+                        return;
+                    }
+                },
+
+                handleKeyDown: function (event) {
+                    if (!this.isUnityFocused()) {
+                        return;
+                    }
+
+                    if (!(event.ctrlKey || event.metaKey)) {
+                        return;
+                    }
+
+                    var key = (event.key || "").toLowerCase();
+                    if (key === "v") {
+                        // Let the browser emit a paste event so we can read from
+                        // event.clipboardData without async clipboard API permissions.
+                        return;
+                    }
+
+                    if (key === "c") {
+                        event.preventDefault();
+                        this.sendToUnity(this.copyMethodName, "");
+                        return;
+                    }
+
+                    if (key === "x") {
+                        event.preventDefault();
+                        this.sendToUnity(this.cutMethodName, "");
+                    }
+                },
+
+                handlePasteEvent: function (event) {
+                    if (!this.isUnityFocused()) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    this.requestPaste(event);
+                },
+
+                handleCopyCutEvent: function (event) {
+                    if (!this.isUnityFocused()) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    this.copyCutEventActive = true;
+                    if (event.type === "copy") {
+                        this.sendToUnity(this.copyMethodName, "");
+                    } else if (event.type === "cut") {
+                        this.sendToUnity(this.cutMethodName, "");
+                    }
+
+                    if (event.clipboardData) {
+                        event.clipboardData.setData("text/plain", this.lastCopiedText || "");
+                    }
+
+                    this.copyCutEventActive = false;
+                },
+
+                initialize: function (canvasElement) {
+                    if (this.isInitialized) {
+                        return;
+                    }
+
+                    this.canvas = canvasElement;
+
+                    if (this.canvas) {
+                        this.canvas.setAttribute("tabindex", "0");
+                        this.canvas.addEventListener("mousedown", function () {
+                            bridge.hasCanvasFocus = true;
+                        });
+                        this.canvas.addEventListener("touchstart", function () {
+                            bridge.hasCanvasFocus = true;
+                        }, { passive: true });
+                        this.canvas.addEventListener("focus", function () {
+                            bridge.hasCanvasFocus = true;
+                        });
+                        this.canvas.addEventListener("blur", function () {
+                            bridge.hasCanvasFocus = false;
+                        });
+                    }
+
+                    window.addEventListener("blur", function () {
+                        bridge.hasCanvasFocus = false;
+                    });
+
+                    document.addEventListener("keydown", function (event) {
+                        bridge.handleKeyDown(event);
+                    }, true);
+
+                    document.addEventListener("paste", function (event) {
+                        bridge.handlePasteEvent(event);
+                    }, true);
+
+                    document.addEventListener("copy", function (event) {
+                        bridge.handleCopyCutEvent(event);
+                    }, true);
+
+                    document.addEventListener("cut", function (event) {
+                        bridge.handleCopyCutEvent(event);
+                    }, true);
+
+                    this.isInitialized = true;
+                }
+            };
+
+            window.WebGLClipboardBridge = bridge;
+
+            // Backward-compatible helper if existing C# code still calls this.
+            window.getClipboardData = function (callbackName) {
+                if (callbackName) {
+                    bridge.pasteMethodName = callbackName;
+                }
+
+                bridge.requestPaste();
+            };
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="gameContainer">
+        <canvas id="unity-canvas" data-pixel-art="{{{ OPTIMIZE_FOR_PIXEL_ART }}}"></canvas>
+        <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+        <script>
+            var unityInstance = null;
+            var canvas = document.querySelector("#unity-canvas");
+            var config = {
+                dataUrl: "Build/{{{ DATA_FILENAME }}}",
+                frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+                codeUrl: "Build/{{{ CODE_FILENAME }}}",
+                streamingAssetsUrl: "StreamingAssets",
+                companyName: "{{{ COMPANY_NAME }}}",
+                productName: "{{{ PRODUCT_NAME }}}",
+                productVersion: "{{{ PRODUCT_VERSION }}}",
+            };
+
+            var scaleToFit;
+            try {
+                scaleToFit = !!JSON.parse("{{{ SCALE_TO_FIT }}}");
+            } catch (e) {
+                scaleToFit = true;
+            }
+
+            function progressHandler(progress) {
+                var percent = progress * 100 + '%';
+                canvas.style.background = 'linear-gradient(to right, white, white ' + percent + ', transparent ' + percent + ', transparent) no-repeat center';
+                canvas.style.backgroundSize = '100% 1rem';
+            }
+
+            function onResize() {
+                var container = canvas.parentElement;
+                var w;
+                var h;
+
+                if (scaleToFit) {
+                    w = window.innerWidth;
+                    h = window.innerHeight;
+
+                    var r = {{{ HEIGHT }}} / {{{ WIDTH }}};
+
+                    if (w * r > window.innerHeight) {
+                        w = Math.min(w, Math.ceil(h / r));
+                    }
+                    h = Math.floor(w * r);
+                } else {
+                    w = {{{ WIDTH }}};
+                    h = {{{ HEIGHT }}};
+                }
+
+                container.style.width = canvas.style.width = w + "px";
+                container.style.height = canvas.style.height = h + "px";
+                container.style.top = Math.floor((window.innerHeight - h) / 2) + "px";
+                container.style.left = Math.floor((window.innerWidth - w) / 2) + "px";
+            }
+
+            createUnityInstance(canvas, config, progressHandler).then(function (instance) {
+                unityInstance = instance;
+                window.unityInstance = instance;
+                onResize();
+
+                if (window.WebGLClipboardBridge && typeof window.WebGLClipboardBridge.initialize === "function") {
+                    window.WebGLClipboardBridge.initialize(canvas);
+                }
+
+                window.onbeforeunload = function () {
+                    if (unityInstance && typeof unityInstance.SendMessage === "function") {
+                        unityInstance.SendMessage("Auth User Data", "CloseTab");
+                    }
+
+                    // Return a message to trigger a confirmation dialog (optional)
+                    return "Are you sure you want to leave the game? All changes will be saved.";
+                };
+            });
+
+            window.addEventListener('resize', onResize);
+            onResize();
+        </script>
+        <script>
+            if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                var meta = document.createElement('meta');
+                meta.name = 'viewport';
+                meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+                document.getElementsByTagName('head')[0].appendChild(meta);
+            }
+        </script>
+    </div>
+</body>
+
+</html>
